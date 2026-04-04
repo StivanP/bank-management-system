@@ -1,4 +1,4 @@
-# BankManagementSystem
+# Bank Management System
 
 ASP.NET Core Web API for managing branches, bank accounts, users (customers/employees/managers), and access/permission mappings via RESTful CRUD endpoints.
 
