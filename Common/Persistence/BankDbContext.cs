@@ -1,14 +1,12 @@
 ﻿using Common.Entities;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Common.Persistence
 {
-
     public class BankDbContext : DbContext
     {
+        public BankDbContext(DbContextOptions<BankDbContext> options) : base(options) { }
+
         public DbSet<Customer> Customers { get; set; } = null!;
         public DbSet<Employee> Employees { get; set; } = null!;
         public DbSet<Manager> Managers { get; set; } = null!;
@@ -19,17 +17,6 @@ namespace Common.Persistence
         public DbSet<EmployeeBranch> EmployeeBranches { get; set; } = null!;
         public DbSet<ManagerBranch> ManagerBranches { get; set; } = null!;
         public DbSet<EmployeeAccountPermission> EmployeeAccountPermissions { get; set; } = null!;
-
-        override protected void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        {
-            optionsBuilder
-                .UseSqlServer(@"
-                        Data Source=DESKTOP-4MG3GT1\SQLEXPRESS;
-                        Initial Catalog=BankDb;
-                        Integrated Security=True;
-                        Encrypt=True;
-                        TrustServerCertificate=True;");
-        }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -71,7 +58,7 @@ namespace Common.Persistence
                     FirstName = "System",
                     LastName = "Administrator",
                     Email = "stivanp3@gmail.com",
-                    Password = "admin123",
+                    Password = "$2a$11$duokN496kvwV9HIkHO7rqeucf8xm2zoP9Z3hRAmHd46SbVr5e1TpS",
                     Address = "Head Office"
                 });
 
@@ -183,4 +170,3 @@ namespace Common.Persistence
         }
     }
 }
-

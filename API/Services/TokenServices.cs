@@ -1,4 +1,5 @@
 ﻿using Common.Entities;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -8,56 +9,47 @@ namespace API.Services
 {
     public class TokenService
     {
-        private const string Issuer = "BankAPI";
-        private const string Audience = "postman";
-        private const string KeyText = "!BushidoClub123!BushidoClub123!BushidoClub123";
+        private readonly string _key;
+        private readonly string _issuer;
+        private readonly string _audience;
+        private readonly int _expiresMinutes;
+
+        public TokenService(IConfiguration configuration)
+        {
+            _key = configuration["Jwt:Key"]
+                ?? throw new InvalidOperationException("Jwt:Key is not configured.");
+            _issuer = configuration["Jwt:Issuer"] ?? "BankAPI";
+            _audience = configuration["Jwt:Audience"] ?? "BankClients";
+            _expiresMinutes = int.TryParse(configuration["Jwt:ExpiresMinutes"], out var m) ? m : 60;
+        }
 
         public string CreateToken(Customer customer)
-        {
-            return CreateTokenInternal(
-                userId: customer.CustomerId,
-                role: "Customer",
-                email: customer.Email
-            );
-        }
+            => CreateTokenInternal(customer.CustomerId, "Customer", customer.Email);
 
         public string CreateToken(Employee employee)
-        {
-            return CreateTokenInternal(
-                userId: employee.EmployeeId,
-                role: "Employee",
-                email: employee.Email
-            );
-        }
+            => CreateTokenInternal(employee.EmployeeId, "Employee", employee.Email);
 
         public string CreateToken(Manager manager)
-        {
-            return CreateTokenInternal(
-                userId: manager.ManagerId,
-                role: "Manager",
-                email: manager.Email
-            );
-        }
+            => CreateTokenInternal(manager.ManagerId, "Manager", manager.Email);
 
         private string CreateTokenInternal(int userId, string role, string email)
         {
-            Claim[] claims = new Claim[]
+            var claims = new[]
             {
                 new Claim("loggedUserId", userId.ToString()),
                 new Claim(ClaimTypes.Role, role),
                 new Claim("email", email)
-
             };
 
-            var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(KeyText));
-            var cred = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(_key));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
-                issuer: Issuer,
-                audience: Audience,
+                issuer: _issuer,
+                audience: _audience,
                 claims: claims,
-                expires: DateTime.Now.AddMinutes(10),
-                signingCredentials: cred
+                expires: DateTime.UtcNow.AddMinutes(_expiresMinutes),
+                signingCredentials: creds
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);

@@ -1,9 +1,10 @@
 ﻿using Common.Entities;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using Common.Persistence;
 
 namespace Common.Services
 {
-    public class EmployeeService : BaseService<Employee> { }
+    public class EmployeeService : BaseService<Employee>
+    {
+        public EmployeeService(BankDbContext context) : base(context) { }
+    }
 }

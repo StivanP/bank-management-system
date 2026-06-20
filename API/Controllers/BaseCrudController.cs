@@ -10,11 +10,16 @@ namespace API.Controllers
 {
     public abstract class BaseCrudController<TEntity, TRequest, TGetRequest, TGetResponse, TService> : ControllerBase
         where TEntity : class, new()
-        where TService : BaseService<TEntity>, new()
+        where TService : BaseService<TEntity>
         where TGetRequest : BaseGetRequest, new()
         where TGetResponse : BaseGetResponse<TEntity>, new()
     {
-        protected readonly TService Service = new();
+        protected readonly TService Service;
+
+        protected BaseCrudController(TService service)
+        {
+            Service = service;
+        }
 
         protected abstract void MapToEntity(TRequest model, TEntity entity);
 
@@ -28,20 +33,11 @@ namespace API.Controllers
             model ??= new TGetRequest();
 
             var filter = BuildFilter(model);
-
             var orderBy = string.IsNullOrWhiteSpace(model.OrderBy) ? null : model.OrderBy;
-
             var page = model.Pager?.Page > 0 ? model.Pager.Page : 1;
             var pageSize = model.Pager?.PageSize > 0 ? model.Pager.PageSize : int.MaxValue;
 
-            var items = Service.GetAll(
-                filter: filter,
-                orderBy: orderBy,
-                sortAsc: model.SortAsc,
-                page: page,
-                pageSize: pageSize
-            );
-
+            var items = Service.GetAll(filter, orderBy, model.SortAsc, page, pageSize);
             var count = Service.Count(filter);
 
             var response = new TGetResponse
@@ -80,7 +76,6 @@ namespace API.Controllers
 
             var entity = new TEntity();
             MapToEntity(model, entity);
-
             Service.Save(entity);
 
             return Ok(entity);
@@ -129,8 +124,7 @@ namespace API.Controllers
             if (reqFilterProp == null || respFilterProp == null || !respFilterProp.CanWrite)
                 return;
 
-            var filterValue = reqFilterProp.GetValue(request);
-            respFilterProp.SetValue(response, filterValue);
+            respFilterProp.SetValue(response, reqFilterProp.GetValue(request));
         }
     }
 }

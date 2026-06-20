@@ -14,6 +14,7 @@ namespace API.Controllers
     public class ManagersController
             : BaseCrudController<Manager, ManagerRequest, ManagerGetRequest, ManagerGetResponse, ManagerService>
     {
+        public ManagersController(ManagerService service) : base(service) { }
         protected override void MapToEntity(ManagerRequest model, Manager entity)
         {
             entity.FirstName = (model.FirstName ?? string.Empty).Trim();

@@ -3,11 +3,9 @@ using API.DTOs.ResponseDTOs.ManagerBranches;
 using API.Services;
 using Common;
 using Common.Entities;
-using Common.Persistence;
 using Common.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
 namespace API.Controllers
@@ -17,6 +15,13 @@ namespace API.Controllers
     [Authorize(Roles = "Manager")]
     public class ManagerBranchesController : ControllerBase
     {
+        private readonly ManagerBranchService _service;
+
+        public ManagerBranchesController(ManagerBranchService service)
+        {
+            _service = service;
+        }
+
         [HttpPost("get")]
         public IActionResult Get([FromBody] ManagerBranchGetRequest? model)
         {
@@ -37,24 +42,13 @@ namespace API.Controllers
             var page = model.Pager?.Page > 0 ? model.Pager.Page : 1;
             var pageSize = model.Pager?.PageSize > 0 ? model.Pager.PageSize : int.MaxValue;
 
-            var service = new ManagerBranchService();
-
-            var count = service.Count(filter);
-            var items = service.GetAll(
-                filter: filter,
-                orderBy: string.IsNullOrWhiteSpace(model.OrderBy) ? null : model.OrderBy,
-                sortAsc: model.SortAsc,
-                page: page,
-                pageSize: pageSize
-            );
-
             return Ok(new ManagerBranchGetResponse
             {
-                Items = items,
+                Items = _service.GetAll(filter, string.IsNullOrWhiteSpace(model.OrderBy) ? null : model.OrderBy, model.SortAsc, page, pageSize),
                 Filter = model.Filter,
                 OrderBy = model.OrderBy,
                 SortAsc = model.SortAsc,
-                Pager = new() { Page = page, PageSize = pageSize, Count = count }
+                Pager = new() { Page = page, PageSize = pageSize, Count = _service.Count(filter) }
             });
         }
 
@@ -64,9 +58,7 @@ namespace API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ServiceResultExtentions<List<Error>>.Failure(null, ModelState));
 
-            var service = new ManagerBranchService();
-
-            if (service.Exists(model.ManagerId, model.BranchId))
+            if (_service.Exists(model.ManagerId, model.BranchId))
                 return Error(409, "Global", "Manager is already assigned to this branch.");
 
             var entity = new ManagerBranch
@@ -76,7 +68,7 @@ namespace API.Controllers
                 StartDate = model.StartDate ?? DateTime.Now
             };
 
-            service.Create(entity);
+            _service.Create(entity);
             return Ok(entity);
         }
 
@@ -86,33 +78,35 @@ namespace API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ServiceResultExtentions<List<Error>>.Failure(null, ModelState));
 
-            var service = new ManagerBranchService();
-
-            var entity = service.GetByIds(model.ManagerId, model.BranchId);
+            var entity = _service.GetByIds(model.ManagerId, model.BranchId);
             if (entity == null) return Error(404, "Global", "Assignment not found.");
 
             if (model.StartDate.HasValue) entity.StartDate = model.StartDate.Value;
 
-            service.Update(entity);
+            _service.Update(entity);
             return Ok(entity);
         }
 
         [HttpDelete]
         public IActionResult Delete([FromQuery] int managerId, [FromQuery] int branchId)
         {
-            var service = new ManagerBranchService();
-
-            if (!service.Exists(managerId, branchId))
+            if (!_service.Exists(managerId, branchId))
                 return Error(404, "Global", "Assignment not found.");
 
-            service.DeleteByIds(managerId, branchId);
+            _service.DeleteByIds(managerId, branchId);
             return Ok();
         }
 
         private IActionResult Error(int status, string key, string msg)
         {
             ModelState.AddModelError(key, msg);
-            return StatusCode(status, ServiceResultExtentions<List<Error>>.Failure(null, ModelState));
+            var payload = ServiceResultExtentions<List<Error>>.Failure(null, ModelState);
+            return status switch
+            {
+                404 => NotFound(payload),
+                409 => Conflict(payload),
+                _ => StatusCode(status, payload)
+            };
         }
     }
 }

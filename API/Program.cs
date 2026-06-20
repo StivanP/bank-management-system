@@ -1,8 +1,11 @@
 ﻿using Common.Persistence;
+using Common.Services;
+using API.Services;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using System.Text;
@@ -48,9 +51,9 @@ namespace API
                     Name = "Authorization",
                     In = ParameterLocation.Header,
                     Type = SecuritySchemeType.Http,
-                    Scheme = "bearer",        
+                    Scheme = "bearer",
                     BearerFormat = "JWT",
-                    Description = "Въведи токен така: Bearer {token}"
+                    Description = "Enter token: Bearer {token}"
                 });
 
                 options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
@@ -59,21 +62,20 @@ namespace API
                 });
             });
 
+            var jwtKey = builder.Configuration["Jwt:Key"]
+                ?? throw new InvalidOperationException("Jwt:Key is not configured.");
+
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
                         ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = new SymmetricSecurityKey(
-                            Encoding.ASCII.GetBytes("!BushidoClub123!BushidoClub123!BushidoClub123")),
-
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(jwtKey)),
                         ValidateIssuer = true,
-                        ValidIssuer = "BankAPI",
-
+                        ValidIssuer = builder.Configuration["Jwt:Issuer"],
                         ValidateAudience = true,
-                        ValidAudience = "postman",
-
+                        ValidAudience = builder.Configuration["Jwt:Audience"],
                         ValidateLifetime = true
                     };
                 });
@@ -83,22 +85,32 @@ namespace API
             builder.Services.AddFluentValidationAutoValidation();
             builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
-            builder.Services.AddDbContext<BankDbContext>();
+            builder.Services.AddDbContext<BankDbContext>(options =>
+                options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+
+            builder.Services.AddScoped<AccountService>();
+            builder.Services.AddScoped<BranchService>();
+            builder.Services.AddScoped<CustomerService>();
+            builder.Services.AddScoped<EmployeeService>();
+            builder.Services.AddScoped<ManagerService>();
+            builder.Services.AddScoped<TokenService>();
+            builder.Services.AddScoped<CustomerAccountService>();
+            builder.Services.AddScoped<EmployeeAccountPermissionService>();
+            builder.Services.AddScoped<EmployeeBranchService>();
+            builder.Services.AddScoped<ManagerBranchService>();
 
             var app = builder.Build();
 
             app.UseSwagger();
             app.UseSwaggerUI(c =>
             {
-                c.RoutePrefix = "swagger"; 
+                c.RoutePrefix = "swagger";
             });
 
             app.UseHttpsRedirection();
             app.UseCors();
-
             app.UseAuthentication();
             app.UseAuthorization();
-
             app.MapControllers();
 
             app.Run();

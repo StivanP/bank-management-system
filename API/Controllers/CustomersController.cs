@@ -14,6 +14,7 @@ namespace API.Controllers
     public class CustomersController
         : BaseCrudController<Customer, CustomerRequest, CustomerGetRequest, CustomerGetResponse, CustomerService>
     {
+        public CustomersController(CustomerService service) : base(service) { }
         private bool TryGetLoggedUserId(out int userId)
         {
             userId = 0;

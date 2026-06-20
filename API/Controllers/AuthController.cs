@@ -10,10 +10,21 @@ using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers
 {
+
+
     [Route("api/[controller]")]
     [ApiController]
     public class AuthController : ControllerBase
     {
+        private readonly BankDbContext _db;
+        private readonly TokenService _tokenService;
+
+        public AuthController(BankDbContext db, TokenService tokenService)
+        {
+            _db = db;
+            _tokenService = tokenService;
+        }
+
         [HttpPost("login")]
         public IActionResult Login([FromBody] AuthTokenRequest model) => CreateToken(model);
 
@@ -26,16 +37,17 @@ namespace API.Controllers
             var email = NormalizeEmail(model.Email);
             var password = model.Password ?? string.Empty;
 
-            using var db = new BankDbContext();
+            var manager = _db.Managers.FirstOrDefault(x => x.Email == email);
+            if (manager != null && BCrypt.Net.BCrypt.Verify(password, manager.Password))
+                return Ok(new { token = _tokenService.CreateToken(manager) });
 
-            var manager = db.Managers.FirstOrDefault(x => x.Email.ToLower() == email && x.Password == password);
-            if (manager != null) return Ok(new { token = new TokenService().CreateToken(manager) });
+            var employee = _db.Employees.FirstOrDefault(x => x.Email == email);
+            if (employee != null && BCrypt.Net.BCrypt.Verify(password, employee.Password))
+                return Ok(new { token = _tokenService.CreateToken(employee) });
 
-            var employee = db.Employees.FirstOrDefault(x => x.Email.ToLower() == email && x.Password == password);
-            if (employee != null) return Ok(new { token = new TokenService().CreateToken(employee) });
-
-            var customer = db.Customers.FirstOrDefault(x => x.Email.ToLower() == email && x.Password == password);
-            if (customer != null) return Ok(new { token = new TokenService().CreateToken(customer) });
+            var customer = _db.Customers.FirstOrDefault(x => x.Email == email);
+            if (customer != null && BCrypt.Net.BCrypt.Verify(password, customer.Password))
+                return Ok(new { token = _tokenService.CreateToken(customer) });
 
             ModelState.AddModelError("Global", "Invalid email or password.");
             return Unauthorized(ServiceResultExtentions<List<Error>>.Failure(null, ModelState));
@@ -47,11 +59,9 @@ namespace API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ServiceResultExtentions<List<Error>>.Failure(null, ModelState));
 
-            using var db = new BankDbContext();
-
             var email = NormalizeEmail(model.Email);
 
-            if (EmailExists(db, email))
+            if (EmailExists(email))
             {
                 ModelState.AddModelError("Email", "Email is already used.");
                 return Conflict(ServiceResultExtentions<List<Error>>.Failure(null, ModelState));
@@ -62,12 +72,12 @@ namespace API.Controllers
                 FirstName = model.FirstName,
                 LastName = model.LastName,
                 Email = email,
-                Password = model.Password,
+                Password = BCrypt.Net.BCrypt.HashPassword(model.Password),
                 Address = model.Address
             };
 
-            db.Customers.Add(entity);
-            db.SaveChanges();
+            _db.Customers.Add(entity);
+            _db.SaveChanges();
 
             return Ok(new { id = entity.CustomerId, role = "Customer" });
         }
@@ -82,20 +92,15 @@ namespace API.Controllers
             var email = NormalizeEmail(model.Email);
             var role = (model.Role ?? string.Empty).Trim();
 
-            using var db = new BankDbContext();
-
             if (email == "stivanp3@gmail.com" &&
                 !role.Equals("Manager", StringComparison.OrdinalIgnoreCase))
                 return Forbid();
 
-            var customer = db.Customers.FirstOrDefault(x => x.Email.ToLower() == email);
-            var employee = db.Employees.FirstOrDefault(x => x.Email.ToLower() == email);
-            var manager = db.Managers.FirstOrDefault(x => x.Email.ToLower() == email);
+            var customer = _db.Customers.FirstOrDefault(x => x.Email == email);
+            var employee = _db.Employees.FirstOrDefault(x => x.Email == email);
+            var manager = _db.Managers.FirstOrDefault(x => x.Email == email);
 
-            PersonBase? src =
-                     (PersonBase?)manager ??
-                     (PersonBase?)employee ??
-                     (PersonBase?)customer;
+            PersonBase? src = (PersonBase?)manager ?? (PersonBase?)employee ?? (PersonBase?)customer;
             if (src == null)
                 return NotFound(new { message = "User not found." });
 
@@ -110,16 +115,10 @@ namespace API.Controllers
 
             if (role.Equals("Manager", StringComparison.OrdinalIgnoreCase))
             {
-                if (manager == null)
-                {
-                    var m = new Manager();
-                    Copy(src, m);
-                    db.Managers.Add(m);
-                }
+                if (manager == null) { var m = new Manager(); Copy(src, m); _db.Managers.Add(m); }
+                if (employee != null) _db.Employees.Remove(employee);
 
-                if (employee != null) db.Employees.Remove(employee);
-
-                try { db.SaveChanges(); }
+                try { _db.SaveChanges(); }
                 catch (DbUpdateException) { return Conflict(new { message = "Cannot change role due to related data." }); }
 
                 return Ok(new { email, role = "Manager" });
@@ -127,16 +126,10 @@ namespace API.Controllers
 
             if (role.Equals("Employee", StringComparison.OrdinalIgnoreCase))
             {
-                if (employee == null)
-                {
-                    var e = new Employee();
-                    Copy(src, e);
-                    db.Employees.Add(e);
-                }
+                if (employee == null) { var e = new Employee(); Copy(src, e); _db.Employees.Add(e); }
+                if (manager != null) _db.Managers.Remove(manager);
 
-                if (manager != null) db.Managers.Remove(manager);
-
-                try { db.SaveChanges(); }
+                try { _db.SaveChanges(); }
                 catch (DbUpdateException) { return Conflict(new { message = "Cannot change role due to related data." }); }
 
                 return Ok(new { email, role = "Employee" });
@@ -144,17 +137,11 @@ namespace API.Controllers
 
             if (role.Equals("Customer", StringComparison.OrdinalIgnoreCase))
             {
-                if (customer == null)
-                {
-                    var c = new Customer();
-                    Copy(src, c);
-                    db.Customers.Add(c);
-                }
+                if (customer == null) { var c = new Customer(); Copy(src, c); _db.Customers.Add(c); }
+                if (manager != null) _db.Managers.Remove(manager);
+                if (employee != null) _db.Employees.Remove(employee);
 
-                if (manager != null) db.Managers.Remove(manager);
-                if (employee != null) db.Employees.Remove(employee);
-
-                try { db.SaveChanges(); }
+                try { _db.SaveChanges(); }
                 catch (DbUpdateException) { return Conflict(new { message = "Cannot demote due to related data." }); }
 
                 return Ok(new { email, role = "Customer" });
@@ -167,11 +154,9 @@ namespace API.Controllers
         private static string NormalizeEmail(string email)
             => (email ?? string.Empty).Trim().ToLowerInvariant();
 
-        private static bool EmailExists(BankDbContext db, string email)
-        {
-            return db.Customers.Any(x => x.Email.ToLower() == email)
-                || db.Employees.Any(x => x.Email.ToLower() == email)
-                || db.Managers.Any(x => x.Email.ToLower() == email);
-        }
+        private bool EmailExists(string email)
+            => _db.Customers.Any(x => x.Email == email)
+            || _db.Employees.Any(x => x.Email == email)
+            || _db.Managers.Any(x => x.Email == email);
     }
 }

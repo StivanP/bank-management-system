@@ -35,3 +35,7 @@ coverage/
 
 # Azure
 *.publishsettings
+
+**/appsettings.Development.json
+
+frontend/

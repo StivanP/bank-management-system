@@ -16,6 +16,7 @@ namespace API.Controllers
     public class EmployeesController
         : BaseCrudController<Employee, EmployeeRequest, EmployeeGetRequest, EmployeeGetResponse, EmployeeService>
     {
+        public EmployeesController(EmployeeService service) : base(service) { }
         private bool TryGetLoggedUserId(out int userId)
         {
             userId = 0;

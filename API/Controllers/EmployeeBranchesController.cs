@@ -15,6 +15,13 @@ namespace API.Controllers
     [Authorize(Roles = "Manager")]
     public class EmployeeBranchesController : ControllerBase
     {
+        private readonly EmployeeBranchService _service;
+
+        public EmployeeBranchesController(EmployeeBranchService service)
+        {
+            _service = service;
+        }
+
         [HttpPost("get")]
         public IActionResult Get([FromBody] EmployeeBranchGetRequest? model)
         {
@@ -37,29 +44,13 @@ namespace API.Controllers
             var page = model.Pager?.Page > 0 ? model.Pager.Page : 1;
             var pageSize = model.Pager?.PageSize > 0 ? model.Pager.PageSize : int.MaxValue;
 
-            var service = new EmployeeBranchService();
-
-            var count = service.Count(filter);
-            var items = service.GetAll(
-                filter: filter,
-                orderBy: string.IsNullOrWhiteSpace(model.OrderBy) ? null : model.OrderBy,
-                sortAsc: model.SortAsc,
-                page: page,
-                pageSize: pageSize
-            );
-
             return Ok(new EmployeeBranchGetResponse
             {
-                Items = items,
+                Items = _service.GetAll(filter, string.IsNullOrWhiteSpace(model.OrderBy) ? null : model.OrderBy, model.SortAsc, page, pageSize),
                 Filter = model.Filter,
                 OrderBy = model.OrderBy,
                 SortAsc = model.SortAsc,
-                Pager = new()
-                {
-                    Page = page,
-                    PageSize = pageSize,
-                    Count = count
-                }
+                Pager = new() { Page = page, PageSize = pageSize, Count = _service.Count(filter) }
             });
         }
 
@@ -69,9 +60,7 @@ namespace API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ServiceResultExtentions<List<Error>>.Failure(null, ModelState));
 
-            var service = new EmployeeBranchService();
-
-            if (service.Exists(model.EmployeeId, model.BranchId))
+            if (_service.Exists(model.EmployeeId, model.BranchId))
                 return Error(409, "Global", "Employee is already assigned to this branch.");
 
             var entity = new EmployeeBranch
@@ -82,7 +71,7 @@ namespace API.Controllers
                 StartDate = model.StartDate ?? DateTime.Now
             };
 
-            service.Create(entity);
+            _service.Create(entity);
             return Ok(entity);
         }
 
@@ -92,27 +81,23 @@ namespace API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ServiceResultExtentions<List<Error>>.Failure(null, ModelState));
 
-            var service = new EmployeeBranchService();
-
-            var entity = service.GetByIds(model.EmployeeId, model.BranchId);
+            var entity = _service.GetByIds(model.EmployeeId, model.BranchId);
             if (entity == null) return Error(404, "Global", "Assignment not found.");
 
             entity.Position = (model.Position ?? string.Empty).Trim();
             if (model.StartDate.HasValue) entity.StartDate = model.StartDate.Value;
 
-            service.Update(entity);
+            _service.Update(entity);
             return Ok(entity);
         }
 
         [HttpDelete]
         public IActionResult Delete([FromQuery] int employeeId, [FromQuery] int branchId)
         {
-            var service = new EmployeeBranchService();
-
-            if (!service.Exists(employeeId, branchId))
+            if (!_service.Exists(employeeId, branchId))
                 return Error(404, "Global", "Assignment not found.");
 
-            service.DeleteByIds(employeeId, branchId);
+            _service.DeleteByIds(employeeId, branchId);
             return Ok();
         }
 
@@ -120,7 +105,6 @@ namespace API.Controllers
         {
             ModelState.AddModelError(key, msg);
             var payload = ServiceResultExtentions<List<Error>>.Failure(null, ModelState);
-
             return status switch
             {
                 404 => NotFound(payload),

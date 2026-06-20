@@ -15,6 +15,13 @@ namespace API.Controllers
     [Authorize(Roles = "Manager")]
     public class EmployeeAccountPermissionsController : ControllerBase
     {
+        private readonly EmployeeAccountPermissionService _service;
+
+        public EmployeeAccountPermissionsController(EmployeeAccountPermissionService service)
+        {
+            _service = service;
+        }
+
         private static string Norm(string? p) => (p ?? string.Empty).Trim().ToUpperInvariant();
         private static bool Valid(string p) => p is "READ" or "WRITE";
 
@@ -48,24 +55,13 @@ namespace API.Controllers
             var page = model.Pager?.Page > 0 ? model.Pager.Page : 1;
             var pageSize = model.Pager?.PageSize > 0 ? model.Pager.PageSize : int.MaxValue;
 
-            var service = new EmployeeAccountPermissionService();
-
-            var count = service.Count(filter);
-            var items = service.GetAll(
-                filter: filter,
-                orderBy: string.IsNullOrWhiteSpace(model.OrderBy) ? null : model.OrderBy,
-                sortAsc: model.SortAsc,
-                page: page,
-                pageSize: pageSize
-            );
-
             return Ok(new EmployeeAccountPermissionGetResponse
             {
-                Items = items,
+                Items = _service.GetAll(filter, string.IsNullOrWhiteSpace(model.OrderBy) ? null : model.OrderBy, model.SortAsc, page, pageSize),
                 Filter = model.Filter,
                 OrderBy = model.OrderBy,
                 SortAsc = model.SortAsc,
-                Pager = new() { Page = page, PageSize = pageSize, Count = count }
+                Pager = new() { Page = page, PageSize = pageSize, Count = _service.Count(filter) }
             });
         }
 
@@ -79,9 +75,7 @@ namespace API.Controllers
             if (!Valid(perm))
                 return Error(400, "Permission", "Permission must be READ or WRITE.");
 
-            var service = new EmployeeAccountPermissionService();
-
-            if (service.Exists(model.EmployeeId, model.AccountId))
+            if (_service.Exists(model.EmployeeId, model.AccountId))
                 return Error(409, "Global", "Permission record already exists for this employee and account.");
 
             var entity = new EmployeeAccountPermission
@@ -92,7 +86,7 @@ namespace API.Controllers
                 GrantedAt = model.GrantedAt ?? DateTime.Now
             };
 
-            service.Create(entity);
+            _service.Create(entity);
             return Ok(entity);
         }
 
@@ -106,34 +100,36 @@ namespace API.Controllers
             if (!Valid(perm))
                 return Error(400, "Permission", "Permission must be READ or WRITE.");
 
-            var service = new EmployeeAccountPermissionService();
-
-            var entity = service.GetByIds(model.EmployeeId, model.AccountId);
+            var entity = _service.GetByIds(model.EmployeeId, model.AccountId);
             if (entity == null) return Error(404, "Global", "Permission record not found.");
 
             entity.Permission = perm;
             if (model.GrantedAt.HasValue) entity.GrantedAt = model.GrantedAt.Value;
 
-            service.Update(entity);
+            _service.Update(entity);
             return Ok(entity);
         }
 
         [HttpDelete]
         public IActionResult Delete([FromQuery] int employeeId, [FromQuery] int accountId)
         {
-            var service = new EmployeeAccountPermissionService();
-
-            if (!service.Exists(employeeId, accountId))
+            if (!_service.Exists(employeeId, accountId))
                 return Error(404, "Global", "Permission record not found.");
 
-            service.DeleteByIds(employeeId, accountId);
+            _service.DeleteByIds(employeeId, accountId);
             return Ok();
         }
 
         private IActionResult Error(int status, string key, string msg)
         {
             ModelState.AddModelError(key, msg);
-            return StatusCode(status, ServiceResultExtentions<List<Error>>.Failure(null, ModelState));
+            var payload = ServiceResultExtentions<List<Error>>.Failure(null, ModelState);
+            return status switch
+            {
+                404 => NotFound(payload),
+                409 => Conflict(payload),
+                _ => StatusCode(status, payload)
+            };
         }
     }
 }

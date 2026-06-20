@@ -14,6 +14,8 @@ namespace API.Controllers
     public class BranchesController
             : BaseCrudController<Branch, BranchRequest, BranchGetRequest, BranchGetResponse, BranchService>
     {
+
+        public BranchesController(BranchService service) : base(service) { }
         protected override void MapToEntity(BranchRequest model, Branch entity)
         {
             entity.BranchName = (model.BranchName ?? string.Empty).Trim();

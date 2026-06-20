@@ -18,6 +18,13 @@ namespace API.Controllers
     [Authorize(Roles = "Employee,Manager,Customer")]
     public class CustomerAccountsController : ControllerBase
     {
+        private readonly CustomerAccountService _service;
+
+        public CustomerAccountsController(CustomerAccountService service)
+        {
+            _service = service;
+        }
+
         [HttpPost("get")]
         public IActionResult Get([FromBody] CustomerAccountGetRequest? model)
         {
@@ -28,15 +35,12 @@ namespace API.Controllers
             {
                 var id = GetLoggedUserId();
                 if (id == null) return Forbid();
-
                 if (model.Filter.CustomerId.HasValue && model.Filter.CustomerId.Value != id.Value)
                     return Forbid();
-
                 model.Filter.CustomerId = id.Value;
             }
 
             var f = model.Filter;
-
             int? customerId = f.CustomerId;
             int? accountId = f.AccountId;
             string role = f.Role;
@@ -53,25 +57,13 @@ namespace API.Controllers
             var page = model.Pager?.Page > 0 ? model.Pager.Page : 1;
             var pageSize = model.Pager?.PageSize > 0 ? model.Pager.PageSize : int.MaxValue;
 
-            var service = new CustomerAccountService();
-
-            var count = service.Count(filter);
-
-            var items = service.GetAll(
-                filter: filter,
-                orderBy: string.IsNullOrWhiteSpace(model.OrderBy) ? null : model.OrderBy,
-                sortAsc: model.SortAsc,
-                page: page,
-                pageSize: pageSize
-            );
-
             return Ok(new CustomerAccountGetResponse
             {
-                Items = items,
+                Items = _service.GetAll(filter, string.IsNullOrWhiteSpace(model.OrderBy) ? null : model.OrderBy, model.SortAsc, page, pageSize),
                 Filter = model.Filter,
                 OrderBy = model.OrderBy,
                 SortAsc = model.SortAsc,
-                Pager = new() { Page = page, PageSize = pageSize, Count = count }
+                Pager = new() { Page = page, PageSize = pageSize, Count = _service.Count(filter) }
             });
         }
 
@@ -82,9 +74,7 @@ namespace API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ServiceResultExtentions<List<Error>>.Failure(null, ModelState));
 
-            var service = new CustomerAccountService();
-
-            if (service.Exists(model.CustomerId, model.AccountId))
+            if (_service.Exists(model.CustomerId, model.AccountId))
                 return Error(409, "Global", "Customer already has access to this account.");
 
             var entity = new CustomerAccount
@@ -95,7 +85,7 @@ namespace API.Controllers
                 SinceDate = model.SinceDate ?? DateTime.Now
             };
 
-            service.Create(entity);
+            _service.Create(entity);
             return Ok(entity);
         }
 
@@ -106,15 +96,13 @@ namespace API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ServiceResultExtentions<List<Error>>.Failure(null, ModelState));
 
-            var service = new CustomerAccountService();
-
-            var entity = service.GetByIds(model.CustomerId, model.AccountId);
+            var entity = _service.GetByIds(model.CustomerId, model.AccountId);
             if (entity == null) return Error(404, "Global", "Access record not found.");
 
             entity.Role = (model.Role ?? string.Empty).Trim();
             if (model.SinceDate.HasValue) entity.SinceDate = model.SinceDate.Value;
 
-            service.Update(entity);
+            _service.Update(entity);
             return Ok(entity);
         }
 
@@ -122,12 +110,10 @@ namespace API.Controllers
         [Authorize(Roles = "Employee,Manager")]
         public IActionResult Delete([FromQuery] int customerId, [FromQuery] int accountId)
         {
-            var service = new CustomerAccountService();
-
-            if (!service.Exists(customerId, accountId))
+            if (!_service.Exists(customerId, accountId))
                 return Error(404, "Global", "Access record not found.");
 
-            service.DeleteByIds(customerId, accountId);
+            _service.DeleteByIds(customerId, accountId);
             return Ok();
         }
 

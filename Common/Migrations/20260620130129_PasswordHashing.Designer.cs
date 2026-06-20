@@ -4,6 +4,7 @@ using Common.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Common.Migrations
 {
     [DbContext(typeof(BankDbContext))]
-    partial class BankDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260620130129_PasswordHashing")]
+    partial class PasswordHashing
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -286,7 +289,7 @@ namespace Common.Migrations
                             Email = "stivanp3@gmail.com",
                             FirstName = "System",
                             LastName = "Administrator",
-                            Password = "$2a$11$duokN496kvwV9HIkHO7rqeucf8xm2zoP9Z3hRAmHd46SbVr5e1TpS"
+                            Password = "$2a$11$eSHBBPmQe5XDOY0y1/xgTOHATcIEqnYEIRFJGlMGWGT3E0aFNHlKe"
                         });
                 });
 

@@ -1,10 +1,7 @@
 ﻿using Common.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
-using System;
-using System.Collections.Generic;
 using System.Linq.Expressions;
-using System.Text;
 
 namespace Common.Services
 {
@@ -16,9 +13,9 @@ namespace Common.Services
 
         private readonly IReadOnlyList<IProperty> _pkProps;
 
-        public BaseJunctionService()
+        public BaseJunctionService(BankDbContext context)
         {
-            Context = new BankDbContext();
+            Context = context;
             Items = Context.Set<TLink>();
             _pkProps = ResolveTwoIntPrimaryKeyOrThrow();
         }
@@ -65,6 +62,7 @@ namespace Common.Services
 
         public bool Exists(int key1, int key2)
             => Items.Find(key1, key2) != null;
+
         public void Create(TLink entity)
         {
             var (key1, key2) = ReadKeyValues(entity);
@@ -104,7 +102,7 @@ namespace Common.Services
 
             Items.Remove(entity);
             Context.SaveChanges();
-        } 
+        }
 
         public void Delete(TLink entity)
         {
@@ -144,7 +142,7 @@ namespace Common.Services
 
             if (p1 == null || p2 == null)
                 throw new InvalidOperationException(
-                    $"Cannot read PK properties on '{typeof(TLink).Name}'. Check property names and EF mapping.");
+                    $"Cannot read PK properties on '{typeof(TLink).Name}'.");
 
             var v1 = p1.GetValue(entity);
             var v2 = p2.GetValue(entity);

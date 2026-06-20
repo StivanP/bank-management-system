@@ -1,10 +1,10 @@
 ﻿using Common.Entities;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using Common.Persistence;
 
 namespace Common.Services
 {
-    public class CustomerAccountService : BaseJunctionService<CustomerAccount> { }
-    
+    public class CustomerAccountService : BaseJunctionService<CustomerAccount>
+    {
+        public CustomerAccountService(BankDbContext context) : base(context) { }
+    }
 }

@@ -1,8 +1,8 @@
 ﻿using API.DTOs.RequestDTOs.Accounts;
 using API.DTOs.ResponseDTOs.Accounts;
 using Common.Entities;
-using Common.Services;
 using Common.Persistence;
+using Common.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Linq.Expressions;
@@ -13,8 +13,15 @@ namespace API.Controllers
     [ApiController]
     [Authorize(Roles = "Employee,Manager")]
     public class AccountsController
-           : BaseCrudController<Account, AccountRequest, AccountGetRequest, AccountGetResponse, AccountService>
+        : BaseCrudController<Account, AccountRequest, AccountGetRequest, AccountGetResponse, AccountService>
     {
+        private readonly BankDbContext _db;
+
+        public AccountsController(AccountService service, BankDbContext db) : base(service)
+        {
+            _db = db;
+        }
+
         private bool TryGetLoggedUserId(out int userId)
         {
             userId = 0;
@@ -25,19 +32,17 @@ namespace API.Controllers
         private bool HasAccountPermission(int accountId, bool requireWrite)
         {
             if (!User.IsInRole("Employee"))
-                return true; 
+                return true;
 
             if (!TryGetLoggedUserId(out var employeeId))
                 return false;
 
-            using var db = new BankDbContext();
-
-            return db.EmployeeAccountPermissions.Any(p =>
+            return _db.EmployeeAccountPermissions.Any(p =>
                 p.EmployeeId == employeeId &&
                 p.AccountId == accountId &&
                 (requireWrite
-                    ? (p.Permission != null && p.Permission.ToUpper() == "WRITE")
-                    : (p.Permission != null && (p.Permission.ToUpper() == "READ" || p.Permission.ToUpper() == "WRITE"))));
+                    ? p.Permission != null && p.Permission.ToUpper() == "WRITE"
+                    : p.Permission != null && (p.Permission.ToUpper() == "READ" || p.Permission.ToUpper() == "WRITE")));
         }
 
         [HttpGet("{id:int}")]
@@ -67,7 +72,6 @@ namespace API.Controllers
             return base.Delete(id);
         }
 
-
         protected override void MapToEntity(AccountRequest model, Account entity)
         {
             entity.BranchId = model.BranchId;
@@ -85,33 +89,22 @@ namespace API.Controllers
             var isEmployee = User.IsInRole("Employee");
             var hasEmployeeId = TryGetLoggedUserId(out var employeeId);
 
-            Expression<Func<Account, bool>> perm = x =>
-                !isEmployee ||
-                (hasEmployeeId && x.EmployeeAccountPermissions.Any(p =>
-                    p.EmployeeId == employeeId &&
-                    p.Permission != null &&
-                    (p.Permission.ToUpper() == "READ" || p.Permission.ToUpper() == "WRITE")));
-
             var f = request.Filter;
-            if (f == null)
-            {
-
-                return perm;
-            }
 
             return x =>
-                (!f.BranchId.HasValue || x.BranchId == f.BranchId.Value) &&
-                (string.IsNullOrWhiteSpace(f.Iban) || x.Iban.Contains(f.Iban)) &&
-                (string.IsNullOrWhiteSpace(f.AccountType) || x.AccountType.Contains(f.AccountType)) &&
-                (string.IsNullOrWhiteSpace(f.Status) || x.Status.Contains(f.Status)) &&
-                (!f.MinBalance.HasValue || x.Balance >= f.MinBalance.Value) &&
-                (!f.MaxBalance.HasValue || x.Balance <= f.MaxBalance.Value) &&
-                (!f.CreatedFrom.HasValue || x.CreatedAt >= f.CreatedFrom.Value) &&
-                (!f.CreatedTo.HasValue || x.CreatedAt <= f.CreatedTo.Value)
-                && (!isEmployee || (hasEmployeeId && x.EmployeeAccountPermissions.Any(p =>
-                       p.EmployeeId == employeeId &&
-                       p.Permission != null &&
-                       (p.Permission.ToUpper() == "READ" || p.Permission.ToUpper() == "WRITE")))); ; 
+                (!isEmployee || (hasEmployeeId && x.EmployeeAccountPermissions.Any(p =>
+                    p.EmployeeId == employeeId &&
+                    p.Permission != null &&
+                    (p.Permission.ToUpper() == "READ" || p.Permission.ToUpper() == "WRITE")))) &&
+                (f == null || (
+                    (!f.BranchId.HasValue || x.BranchId == f.BranchId.Value) &&
+                    (string.IsNullOrWhiteSpace(f.Iban) || x.Iban.Contains(f.Iban)) &&
+                    (string.IsNullOrWhiteSpace(f.AccountType) || x.AccountType.Contains(f.AccountType)) &&
+                    (string.IsNullOrWhiteSpace(f.Status) || x.Status.Contains(f.Status)) &&
+                    (!f.MinBalance.HasValue || x.Balance >= f.MinBalance.Value) &&
+                    (!f.MaxBalance.HasValue || x.Balance <= f.MaxBalance.Value) &&
+                    (!f.CreatedFrom.HasValue || x.CreatedAt >= f.CreatedFrom.Value) &&
+                    (!f.CreatedTo.HasValue || x.CreatedAt <= f.CreatedTo.Value)));
         }
     }
 }

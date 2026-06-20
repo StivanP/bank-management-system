@@ -1,9 +1,10 @@
 ﻿using Common.Entities;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using Common.Persistence;
 
 namespace Common.Services
 {
-    public class EmployeeBranchService : BaseJunctionService<EmployeeBranch> { }
+    public class EmployeeBranchService : BaseJunctionService<EmployeeBranch>
+    {
+        public EmployeeBranchService(BankDbContext context) : base(context) { }
+    }
 }
